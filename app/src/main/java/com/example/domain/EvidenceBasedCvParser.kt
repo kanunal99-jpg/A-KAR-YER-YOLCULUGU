@@ -1,7 +1,11 @@
 package com.example.domain
 
+import com.example.data.model.AchievementItem
+import com.example.data.model.CertificationItem
+import com.example.data.model.EducationItem
 import com.example.data.model.ExperienceItem
 import com.example.data.model.LanguageItem
+import com.example.data.model.LeadershipProfile
 import com.example.data.model.MasterCareerProfile
 import com.example.data.model.SkillItem
 import java.util.Locale
@@ -12,9 +16,10 @@ import java.util.Locale
  * Unknown values stay empty instead of being filled with demo data.
  */
 object EvidenceBasedCvParser {
-    private val emailRegex = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
-    private val phoneRegex = Regex("(?:\\+90|0)?\\s?5\\d{2}\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}")
-    private val yearRangeRegex = Regex("(19\\d{2}|20\\d{2})\\s*[-–—]\\s*(19\\d{2}|20\\d{2}|devam|günümüz|current)", RegexOption.IGNORE_CASE)
+    private val emailRegex = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}")
+    private val phoneRegex = Regex("(?:\\\\+90|0)?\\\\s?5\\\\d{2}\\\\s?\\\\d{3}\\\\s?\\\\d{2}\\\\s?\\\\d{2}")
+    private val yearRangeRegex = Regex("(19\\\\d{2}|20\\\\d{2})\\\\s*[-–—]\\\\s*(19\\\\d{2}|20\\\\d{2}|devam|günümüz|current)", RegexOption.IGNORE_CASE)
+    private val singleYearRegex = Regex("(19\\\\d{2}|20\\\\d{2})")
 
     private val cityNames = listOf("İstanbul", "Ankara", "İzmir", "Bursa", "Kocaeli", "Antalya", "Sakarya", "Düzce", "Bolu", "Karabük")
     private val knownSkills = listOf(
@@ -35,6 +40,9 @@ object EvidenceBasedCvParser {
         val skills = extractSkills(source)
         val experiences = extractExplicitExperiences(lines)
         val languages = extractLanguages(source)
+        val education = extractEducation(lines)
+        val certifications = extractCertifications(lines)
+        val achievements = extractAchievements(lines)
 
         return MasterCareerProfile(
             fullName = fullName,
@@ -46,11 +54,11 @@ object EvidenceBasedCvParser {
             skills = skills,
             experiences = experiences,
             languages = languages,
-            achievements = emptyList(),
-            education = emptyList(),
-            certifications = emptyList(),
-            leadership = com.example.data.model.LeadershipProfile(),
-            careerGoals = emptyList(),
+            achievements = achievements,
+            education = education,
+            certifications = certifications,
+            leadership = inferLeadership(source),
+            careerGoals = extractLabeledList(lines, listOf("kariyer hedefi", "kariyer hedefleri", "hedef")),
             profileScore = 0,
             improvementAreas = emptyList(),
             pendingQuestions = emptyList()
@@ -72,12 +80,19 @@ object EvidenceBasedCvParser {
 
     private fun extractLabeledValue(lines: List<String>, labels: List<String>): String {
         for (line in lines) {
-            val match = labels.firstOrNull { label -> line.startsWith("$label:", true) || line.startsWith("$label -", true) }
+            val match = labels.firstOrNull { label ->
+                line.startsWith("$label:", true) || line.startsWith("$label -", true) || line.startsWith("$label —", true)
+            }
             if (match != null) {
-                return line.substringAfter(':', line.substringAfter("-", "")).trim()
+                return line.substringAfter(':', line.substringAfter('-', line.substringAfter('—', ""))).trim()
             }
         }
         return ""
+    }
+
+    private fun extractLabeledList(lines: List<String>, labels: List<String>): List<String> {
+        val value = extractLabeledValue(lines, labels)
+        return value.split(',', ';', '|').map { it.trim() }.filter { it.isNotBlank() }
     }
 
     private fun extractSkills(source: String): List<SkillItem> = knownSkills.mapNotNull { skill ->
@@ -114,7 +129,55 @@ object EvidenceBasedCvParser {
                 isCurrent = end.equals("devam", true) || end.equals("günümüz", true) || end.equals("current", true)
             )
         }
-        return result
+        return result.distinctBy { "${it.company}|${it.position}|${it.startYear}|${it.endYear}" }
+    }
+
+    private fun extractEducation(lines: List<String>): List<EducationItem> {
+        val result = mutableListOf<EducationItem>()
+        for (line in lines) {
+            if (!line.contains("üniversite", true) && !line.contains("fakülte", true) && !line.contains("college", true) && !line.contains("university", true)) continue
+            val year = singleYearRegex.find(line)?.value.orEmpty()
+            val parts = line.split('|', ';').map { it.trim() }.filter { it.isNotBlank() }
+            val school = parts.firstOrNull().orEmpty()
+            if (school.isNotBlank()) {
+                result += EducationItem(
+                    school = school,
+                    department = parts.getOrNull(1).orEmpty(),
+                    degree = parts.getOrNull(2).orEmpty(),
+                    graduationYear = year
+                )
+            }
+        }
+        return result.distinctBy { "${it.school}|${it.department}|${it.graduationYear}" }
+    }
+
+    private fun extractCertifications(lines: List<String>): List<CertificationItem> {
+        val result = mutableListOf<CertificationItem>()
+        for (line in lines) {
+            if (!line.contains("sertifika", true) && !line.contains("certificate", true) && !line.contains("certification", true)) continue
+            val year = singleYearRegex.find(line)?.value.orEmpty()
+            val value = line.substringAfter(':', line).trim()
+            if (value.isNotBlank()) result += CertificationItem(name = value, issuer = "", year = year)
+        }
+        return result.distinctBy { "${it.name}|${it.issuer}|${it.year}" }
+    }
+
+    private fun extractAchievements(lines: List<String>): List<AchievementItem> {
+        val result = mutableListOf<AchievementItem>()
+        for (line in lines) {
+            if (!line.contains("başarı", true) && !line.contains("achievement", true) && !line.contains("ödül", true) && !line.contains("award", true)) continue
+            val metric = Regex("[+%]?\\\\d+(?:[.,]\\\\d+)?\\\\s*%?").find(line)?.value.orEmpty()
+            result += AchievementItem(title = line, metric = metric, companyOrContext = "")
+        }
+        return result.distinctBy { it.title }
+    }
+
+    private fun inferLeadership(source: String): LeadershipProfile {
+        if (!Regex("\\\\bekip\\\\b|\\\\byönet\\\\w*|leadership|team", RegexOption.IGNORE_CASE).containsMatchIn(source)) {
+            return LeadershipProfile()
+        }
+        val teamSize = Regex("(?:ekip|team)[^0-9]{0,20}(\\\\d+)", RegexOption.IGNORE_CASE).find(source)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+        return LeadershipProfile(hasLeadershipExperience = true, maxTeamSize = teamSize)
     }
 
     private fun extractLanguages(source: String): List<LanguageItem> {
@@ -122,6 +185,6 @@ object EvidenceBasedCvParser {
         if (source.contains("Türkçe", true)) result += LanguageItem("Türkçe", "Belirtilmedi")
         if (source.contains("İngilizce", true) || source.contains("English", true)) result += LanguageItem("İngilizce", "Belirtilmedi")
         if (source.contains("Almanca", true) || source.contains("German", true)) result += LanguageItem("Almanca", "Belirtilmedi")
-        return result
+        return result.distinctBy { it.language.lowercase(Locale("tr")) }
     }
 }
