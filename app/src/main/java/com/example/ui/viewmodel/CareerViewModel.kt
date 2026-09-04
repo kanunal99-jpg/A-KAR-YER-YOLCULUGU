@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.*
 import com.example.data.repository.CareerRepository
 import com.example.domain.CareerAgentEngine
+import com.example.domain.EvidenceBasedCvParser
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 
@@ -76,8 +77,8 @@ class CareerViewModel(
     fun uploadAndAnalyzeCv(rawText: String) {
         viewModelScope.launch {
             _isProcessing.value = true
-            kotlinx.coroutines.delay(800) // Realistic AI extraction feedback
-            val parsed = CareerAgentEngine.parseCvText(rawText)
+            kotlinx.coroutines.delay(800)
+            val parsed = EvidenceBasedCvParser.parse(rawText)
             repository.updateMasterProfile(parsed)
             _isProcessing.value = false
         }
