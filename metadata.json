@@ -1,0 +1,6 @@
+{
+  "name": "Aİ Kariyer Yolculuğu",
+  "description": "ARAMA — Kullanıcıyı tanıyan, geliştiren, uygun işleri bulan ve işe hazırlayan kişisel AI Kariyer Ajanı.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
