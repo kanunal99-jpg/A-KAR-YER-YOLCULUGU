@@ -9,24 +9,37 @@ import org.junit.Test
 class CareerAgentEngineTest {
 
     @Test
-    fun testParseCvText_extractsProfileAndGeneratesQuestions() {
+    fun testParseCvText_extractsOnlySourceFacts() {
         val rawCv = """
             Ahmet Demir
-            Saha Satış Şefi
+            Pozisyon: Saha Satış Şefi
             ahmet.demir@firma.com | 0532 999 88 77 | İstanbul
-            Sütaş Süt Ürünleri'nde 60 bayi ve 18 kişilik saha ekibi yönettim.
-            Ciro ve dağıtım maliyetlerini %14 düşürdüm.
+            Sütaş Süt Ürünleri | Saha Satış Şefi | 2021-2024
+            Başarı: Dağıtım maliyetlerini %14 düşürdüm.
         """.trimIndent()
 
         val profile = CareerAgentEngine.parseCvText(rawCv)
-
         assertEquals("Ahmet Demir", profile.fullName)
         assertEquals("ahmet.demir@firma.com", profile.email)
         assertEquals("İstanbul", profile.locationCity)
-        assertTrue(profile.skills.isNotEmpty())
-        assertTrue(profile.experiences.isNotEmpty())
-        assertTrue(profile.pendingQuestions.isNotEmpty())
-        assertTrue(profile.profileScore > 70)
+        assertEquals(1, profile.experiences.size)
+        assertEquals("Sütaş Süt Ürünleri", profile.experiences.single().company)
+        assertTrue(profile.achievements.any { it.title.contains("%14") })
+        assertEquals(0, profile.profileScore)
+    }
+
+    @Test
+    fun testLegacyParserNeverInventsCompaniesOrAchievements() {
+        val profile = CareerAgentEngine.parseCvText(
+            "Ali Veli\nPozisyon: Satış Yöneticisi\nSatış ve Excel bilgisi"
+        )
+        assertEquals("", profile.email)
+        assertEquals("", profile.phone)
+        assertEquals("", profile.locationCity)
+        assertTrue(profile.experiences.isEmpty())
+        assertTrue(profile.achievements.isEmpty())
+        assertTrue(profile.education.isEmpty())
+        assertTrue(profile.certifications.isEmpty())
     }
 
     @Test

@@ -24,6 +24,17 @@ class EvidenceBasedCvParserTest {
     }
 
     @Test
+    fun capturesExplicitContactButDoesNotFabricateMissingFields() {
+        val profile = EvidenceBasedCvParser.parse(
+            "Ayşe Yılmaz\nE-posta: ayse@example.com\nTelefon: 0532 999 88 77\nKocaeli"
+        )
+        assertEquals("ayse@example.com", profile.email)
+        assertTrue(profile.phone.contains("0532"))
+        assertEquals("Kocaeli", profile.locationCity)
+        assertTrue(profile.experiences.isEmpty())
+    }
+
+    @Test
     fun explicitExperienceIsParsedWithoutFabricatedMetrics() {
         val profile = EvidenceBasedCvParser.parse(
             "Ayşe Yılmaz\n\nABC A.Ş. | Satış Uzmanı | 2021-2024\nExcel, CRM"

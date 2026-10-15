@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build-apk:
@@ -27,6 +27,9 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '9.3.1'
+
+      - name: Run CV parser and app unit tests
+        run: gradle --no-daemon --stacktrace testDebugUnitTest
 
       - name: Generate CI release keystore
         shell: bash
@@ -53,6 +56,8 @@ jobs:
         shell: bash
         run: |
           test -f app/build/outputs/apk/release/app-release.apk
+          unzip -t app/build/outputs/apk/release/app-release.apk > /dev/null
+          sha256sum app/build/outputs/apk/release/app-release.apk > apk-sha256.txt
           ls -lh app/build/outputs/apk/release/app-release.apk
 
       - name: Upload app-release.apk artifact
@@ -62,3 +67,17 @@ jobs:
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
+  
+      - name: Publish verified release APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v1.3.0-build.${{ github.run_number }}
+          name: A-Kariyer Yolculuğu 1.3.0 (Build ${{ github.run_number }})
+          body: |
+            CV kaynak doğruluğu: uydurma şirket/deneyim kaldırıldı.
+            Otomatik CV ayrıştırma testleri ve Android Release APK doğrulandı.
+            Not: CI geçici imzalama anahtarı kullanır; önceki APK'nın üzerine yüklemede imza uyuşmazlığı yaşanabilir.
+          files: |
+            app/build/outputs/apk/release/app-release.apk
+            apk-sha256.txt
+          fail_on_unmatched_files: true

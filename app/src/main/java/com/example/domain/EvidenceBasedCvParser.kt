@@ -16,10 +16,10 @@ import java.util.Locale
  * Unknown values stay empty instead of being filled with demo data.
  */
 object EvidenceBasedCvParser {
-    private val emailRegex = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\\\.[a-zA-Z]{2,}")
-    private val phoneRegex = Regex("(?:\\\\+90|0)?\\\\s?5\\\\d{2}\\\\s?\\\\d{3}\\\\s?\\\\d{2}\\\\s?\\\\d{2}")
-    private val yearRangeRegex = Regex("(19\\\\d{2}|20\\\\d{2})\\\\s*[-–—]\\\\s*(19\\\\d{2}|20\\\\d{2}|devam|günümüz|current)", RegexOption.IGNORE_CASE)
-    private val singleYearRegex = Regex("(19\\\\d{2}|20\\\\d{2})")
+    private val emailRegex = Regex("[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}")
+    private val phoneRegex = Regex("(?:\\+90|0)?\\s?5\\d{2}\\s?\\d{3}\\s?\\d{2}\\s?\\d{2}")
+    private val yearRangeRegex = Regex("(19\\d{2}|20\\d{2})\\s*[-–—]\\s*(19\\d{2}|20\\d{2}|devam|günümüz|current)", RegexOption.IGNORE_CASE)
+    private val singleYearRegex = Regex("(19\\d{2}|20\\d{2})")
 
     private val cityNames = listOf("İstanbul", "Ankara", "İzmir", "Bursa", "Kocaeli", "Antalya", "Sakarya", "Düzce", "Bolu", "Karabük")
     private val knownSkills = listOf(
@@ -166,17 +166,17 @@ object EvidenceBasedCvParser {
         val result = mutableListOf<AchievementItem>()
         for (line in lines) {
             if (!line.contains("başarı", true) && !line.contains("achievement", true) && !line.contains("ödül", true) && !line.contains("award", true)) continue
-            val metric = Regex("[+%]?\\\\d+(?:[.,]\\\\d+)?\\\\s*%?").find(line)?.value.orEmpty()
+            val metric = Regex("[+%]?\\d+(?:[.,]\\d+)?\\s*%?").find(line)?.value.orEmpty()
             result += AchievementItem(title = line, metric = metric, companyOrContext = "")
         }
         return result.distinctBy { it.title }
     }
 
     private fun inferLeadership(source: String): LeadershipProfile {
-        if (!Regex("\\\\bekip\\\\b|\\\\byönet\\\\w*|leadership|team", RegexOption.IGNORE_CASE).containsMatchIn(source)) {
+        if (!Regex("\\bekip\\b|\\byönet\\w*|leadership|team", RegexOption.IGNORE_CASE).containsMatchIn(source)) {
             return LeadershipProfile()
         }
-        val teamSize = Regex("(?:ekip|team)[^0-9]{0,20}(\\\\d+)", RegexOption.IGNORE_CASE).find(source)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
+        val teamSize = Regex("(?:ekip|team)[^0-9]{0,20}(\\d+)", RegexOption.IGNORE_CASE).find(source)?.groupValues?.getOrNull(1)?.toIntOrNull() ?: 0
         return LeadershipProfile(hasLeadershipExperience = true, maxTeamSize = teamSize)
     }
 
