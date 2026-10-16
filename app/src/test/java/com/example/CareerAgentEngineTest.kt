@@ -111,6 +111,21 @@ class CareerAgentEngineTest {
     }
 
     @Test
+    fun testPresetCv_usesOnlyCandidateEvidence() {
+        val emptyProfile = com.example.data.model.MasterCareerProfile(fullName = "Deniz Örnek")
+        for (type in listOf("management", "operations", "sales")) {
+            val result = CareerAgentEngine.generatePresetCvVersion(emptyProfile, type)
+            assertFalse(result.professionalSummary.contains("Sütaş"))
+            assertFalse(result.professionalSummary.contains("Peyman"))
+            assertFalse(result.professionalSummary.contains("18 kişilik"))
+            assertFalse(result.professionalSummary.contains("60+"))
+            assertFalse(result.professionalSummary.contains("%110"))
+            assertTrue(result.keyHighlightedSkills.isEmpty())
+            assertEquals(0, result.atsScoreEstimated)
+        }
+    }
+
+    @Test
     fun testInterviewFlowAndDiscoveredExperience_integrationWithCv() {
         val profile = SampleData.sampleInitialProfile
         val job = SampleData.sampleJobs.first()
