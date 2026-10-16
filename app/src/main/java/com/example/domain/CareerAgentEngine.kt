@@ -43,7 +43,7 @@ object CareerAgentEngine {
             profileSkillNames.any { p -> p.contains(req.lowercase()) || req.lowercase().contains(p) }
         }
         val skillsScore = if (job.requiredSkills.isNotEmpty()) {
-            ((matchedSkills.size.toFloat() / job.requiredSkills.size) * 100).toInt().coerceIn(60, 98)
+            ((matchedSkills.size.toFloat() / job.requiredSkills.size) * 100).toInt().coerceIn(0, 100)
         } else 85
 
         val experienceScore = if (profile.experiences.size >= 2) 92 else 75
