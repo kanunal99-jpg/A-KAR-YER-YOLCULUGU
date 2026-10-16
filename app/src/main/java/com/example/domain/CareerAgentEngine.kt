@@ -174,41 +174,44 @@ object CareerAgentEngine {
      * Generates a preset role-based CV version from Master Profile (e.g. Sales CV, Leadership CV, FMCG CV).
      */
     fun generatePresetCvVersion(profile: MasterCareerProfile, presetType: String): ResumeVersion {
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale("tr"))
-        val dateStr = dateFormat.format(Date())
-
-        return when (presetType) {
-            "management" -> ResumeVersion(
-                id = "cv_mgmt_${System.currentTimeMillis()}",
-                title = "Yönetim & Liderlik Odaklı CV",
-                targetRoleOrJob = "Bölge Satış Müdürü / Direktör",
-                professionalSummary = "18 kişilik saha ekibinin sevk ve idaresi, bütçe yönetimi ve distribütör ilişkilerinde uzmanlaşmış, stratejik karar alma yetkinliğine sahip yönetici profili.",
-                keyHighlightedSkills = listOf("Ekip Liderliği & People Management", "Bütçe & Ciro Yönetimi", "Bayi Ağı Stratejisi", "KPI & Performans Değerlendirme"),
-                prioritizedExperienceIds = profile.experiences.map { it.id },
-                atsScoreEstimated = 91,
-                createdAtFormatted = dateStr
-            )
-            "operations" -> ResumeVersion(
-                id = "cv_ops_${System.currentTimeMillis()}",
-                title = "Saha Operasyon & FMCG CV",
-                targetRoleOrJob = "Saha Operasyon Yöneticisi",
-                professionalSummary = "FMCG sektöründe 60+ bayilik sevkiyat ve tedarik süreçlerinin kesintisiz yürütülmesi, dağıtım maliyet optimizasyonu ve penetrasyon artışında kanıtlanmış saha uzmanlığı.",
-                keyHighlightedSkills = listOf("Saha Satış Operasyonu", "Bayi Yönetimi", "Tanzim-Teşhir & Penetrasyon", "Lojistik & Sevkiyat Koordinasyonu"),
-                prioritizedExperienceIds = profile.experiences.map { it.id },
-                atsScoreEstimated = 89,
-                createdAtFormatted = dateStr
-            )
-            else -> ResumeVersion(
-                id = "cv_sales_${System.currentTimeMillis()}",
-                title = "Satış & İş Geliştirme CV",
-                targetRoleOrJob = "Kıdemli Satış Yöneticisi",
-                professionalSummary = "Portföy genişletme, yeni bayi ve kanal açılışı, ticari müzakere ve satış hedeflerini düzenli olarak %110+ gerçekleştirme geçmişi.",
-                keyHighlightedSkills = listOf("Ticari Satış & Müzakere", "Aktif Müşteri Portföy Yönetimi", "Ciro Artışı", "Kanal Genişletme"),
-                prioritizedExperienceIds = profile.experiences.map { it.id },
-                atsScoreEstimated = 88,
-                createdAtFormatted = dateStr
-            )
+        val dateStr = SimpleDateFormat("dd.MM.yyyy", Locale("tr")).format(Date())
+        val (title, targetRole) = when (presetType) {
+            "management" -> "Yönetim & Liderlik Odaklı CV" to "Yönetim / Liderlik"
+            "operations" -> "Saha Operasyon & FMCG CV" to "Saha Operasyon"
+            else -> "Satış & İş Geliştirme CV" to "Satış / İş Geliştirme"
         }
+
+        // A preset changes presentation, not the candidate's employment history.
+        val skills = profile.skills.map { it.name.trim() }.filter { it.isNotEmpty() }.take(6)
+        val roles = profile.experiences.take(3).mapNotNull { experience ->
+            listOf(experience.position, experience.company)
+                .filter { it.isNotBlank() }
+                .joinToString(" / ")
+                .takeIf { it.isNotBlank() }
+        }
+        val achievements = profile.achievements
+            .filter { it.verified && it.title.isNotBlank() }
+            .take(3).map { it.title }
+
+        val evidence = mutableListOf<String>()
+        if (profile.summary.isNotBlank()) evidence.add(profile.summary.trim())
+        if (roles.isNotEmpty()) evidence.add("Deneyimler: ${roles.joinToString("; ")}.")
+        if (skills.isNotEmpty()) evidence.add("Beceriler: ${skills.joinToString(", ")}.")
+        if (achievements.isNotEmpty()) evidence.add("CV'de belirtilen başarılar: ${achievements.joinToString("; ")}.")
+
+        return ResumeVersion(
+            id = "cv_preset_${System.currentTimeMillis()}_${presetType}",
+            title = title,
+            targetRoleOrJob = targetRole,
+            professionalSummary = evidence.joinToString(" ").ifBlank {
+                "Mesleki deneyim ve yetkinlik bilgileri aday profiline henüz eklenmedi."
+            },
+            keyHighlightedSkills = skills,
+            prioritizedExperienceIds = profile.experiences.map { it.id },
+            // A generic preset has no target job, so an ATS match cannot be measured.
+            atsScoreEstimated = 0,
+            createdAtFormatted = dateStr
+        )
     }
 
     /**
