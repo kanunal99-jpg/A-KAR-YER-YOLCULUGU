@@ -57,6 +57,27 @@ class CareerAgentEngineTest {
     }
 
     @Test
+    fun testJobMatching_skillPercentIsNotArtificiallyInflated() {
+        val profile = SampleData.sampleInitialProfile.copy(skills = emptyList())
+        val job = SampleData.sampleJobs.first().copy(
+            requiredSkills = listOf("Özel Sertifika A", "Özel Sertifika B")
+        )
+
+        val noSkills = CareerAgentEngine.evaluateJobMatch(profile, job)
+        assertEquals(0, noSkills.skillsMatchPercent)
+
+        val oneSkill = profile.copy(
+            skills = listOf(com.example.data.model.SkillItem(name = "Özel Sertifika A", category = "Teknik"))
+        )
+        assertEquals(50, CareerAgentEngine.evaluateJobMatch(oneSkill, job).skillsMatchPercent)
+
+        val bothSkills = oneSkill.copy(
+            skills = oneSkill.skills + com.example.data.model.SkillItem(name = "Özel Sertifika B", category = "Teknik")
+        )
+        assertEquals(100, CareerAgentEngine.evaluateJobMatch(bothSkills, job).skillsMatchPercent)
+    }
+
+    @Test
     fun testTailoredCvAndCoverLetter_generatedWithoutHallucination() {
         val profile = SampleData.sampleInitialProfile
         val job = SampleData.sampleJobs.first()
