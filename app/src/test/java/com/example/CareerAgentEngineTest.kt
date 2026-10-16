@@ -78,6 +78,48 @@ class CareerAgentEngineTest {
     }
 
     @Test
+    fun testMatchExplanation_doesNotInventCandidateHistory() {
+        val profile = com.example.data.model.MasterCareerProfile(
+            fullName = "Deniz Örnek",
+            skills = emptyList(),
+            experiences = emptyList(),
+            achievements = emptyList(),
+            languages = emptyList()
+        )
+        val job = SampleData.sampleJobs.first().copy(
+            requiredSkills = listOf("SAP SD"),
+            preferredSkills = listOf("İngilizce")
+        )
+        val match = CareerAgentEngine.evaluateJobMatch(profile, job)
+        val explanations = (
+            match.whyYouAreFit + match.whyYouAreNotFit +
+                match.missingGapsToClose + listOf(match.aiInsight)
+        ).joinToString(" ")
+
+        assertTrue(match.whyYouAreFit.isEmpty())
+        assertTrue(match.whyYouAreNotFit.any { it.contains("SAP SD") })
+        assertFalse(explanations.contains("B1 (Orta)"))
+        assertFalse(explanations.contains("18 kişilik"))
+        assertFalse(explanations.contains("%112"))
+        assertFalse(explanations.contains("7+ yıllık"))
+        assertFalse(explanations.contains("Sütaş"))
+        assertFalse(explanations.contains("Peyman"))
+    }
+
+    @Test
+    fun testInterviewQuestion_doesNotInventAchievement() {
+        val profile = com.example.data.model.MasterCareerProfile(fullName = "Deniz Örnek")
+        val job = SampleData.sampleJobs.first()
+        val session = CareerAgentEngine.generateInterviewSession(
+            job, profile, InterviewMode.JOB_SPECIFIC
+        )
+        val questions = session.questions.joinToString(" ") { it.questionText }
+        assertFalse(questions.contains("Sütaş"))
+        assertFalse(questions.contains("%14"))
+        assertTrue(questions.contains("ölçülebilir bir başarı"))
+    }
+
+    @Test
     fun testTailoredCvAndCoverLetter_generatedWithoutHallucination() {
         val profile = SampleData.sampleInitialProfile
         val job = SampleData.sampleJobs.first()
