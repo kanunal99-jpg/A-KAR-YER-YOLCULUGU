@@ -57,6 +57,27 @@ class CareerAgentEngineTest {
     }
 
     @Test
+    fun testJobMatching_skillPercentIsNotArtificiallyInflated() {
+        val profile = SampleData.sampleInitialProfile.copy(skills = emptyList())
+        val job = SampleData.sampleJobs.first().copy(
+            requiredSkills = listOf("Özel Sertifika A", "Özel Sertifika B")
+        )
+
+        val noSkills = CareerAgentEngine.evaluateJobMatch(profile, job)
+        assertEquals(0, noSkills.skillsMatchPercent)
+
+        val oneSkill = profile.copy(
+            skills = listOf(com.example.data.model.SkillItem(name = "Özel Sertifika A", category = "Teknik"))
+        )
+        assertEquals(50, CareerAgentEngine.evaluateJobMatch(oneSkill, job).skillsMatchPercent)
+
+        val bothSkills = oneSkill.copy(
+            skills = oneSkill.skills + com.example.data.model.SkillItem(name = "Özel Sertifika B", category = "Teknik")
+        )
+        assertEquals(100, CareerAgentEngine.evaluateJobMatch(bothSkills, job).skillsMatchPercent)
+    }
+
+    @Test
     fun testTailoredCvAndCoverLetter_generatedWithoutHallucination() {
         val profile = SampleData.sampleInitialProfile
         val job = SampleData.sampleJobs.first()
@@ -66,7 +87,42 @@ class CareerAgentEngineTest {
         assertTrue(tailored.title.contains(job.company))
         assertTrue(tailored.targetRoleOrJob.contains(job.title))
         assertTrue(tailored.coverLetterText.contains(job.company))
-        assertTrue(tailored.atsScoreEstimated >= 85)
+        assertEquals(CareerAgentEngine.evaluateJobMatch(profile, job).overallMatchPercent, tailored.atsScoreEstimated)
+    }
+
+    @Test
+    fun testTailoredCv_neverInventsExperienceForEmptyCandidateProfile() {
+        val profile = com.example.data.model.MasterCareerProfile(
+            fullName = "Deniz Örnek",
+            email = "deniz@example.com"
+        )
+        val job = SampleData.sampleJobs.first()
+
+        val tailored = CareerAgentEngine.generateTailoredCv(profile, job)
+
+        assertTrue(tailored.coverLetterText.contains("Deniz Örnek"))
+        assertTrue(tailored.coverLetterText.contains(job.company))
+        assertFalse(tailored.coverLetterText.contains("Sütaş"))
+        assertFalse(tailored.coverLetterText.contains("Peyman"))
+        assertFalse(tailored.coverLetterText.contains("%14"))
+        assertFalse(tailored.coverLetterText.contains("7 yılı"))
+        assertFalse(tailored.professionalSummary.contains("60+"))
+        assertTrue(tailored.keyHighlightedSkills.isEmpty())
+    }
+
+    @Test
+    fun testPresetCv_usesOnlyCandidateEvidence() {
+        val emptyProfile = com.example.data.model.MasterCareerProfile(fullName = "Deniz Örnek")
+        for (type in listOf("management", "operations", "sales")) {
+            val result = CareerAgentEngine.generatePresetCvVersion(emptyProfile, type)
+            assertFalse(result.professionalSummary.contains("Sütaş"))
+            assertFalse(result.professionalSummary.contains("Peyman"))
+            assertFalse(result.professionalSummary.contains("18 kişilik"))
+            assertFalse(result.professionalSummary.contains("60+"))
+            assertFalse(result.professionalSummary.contains("%110"))
+            assertTrue(result.keyHighlightedSkills.isEmpty())
+            assertEquals(0, result.atsScoreEstimated)
+        }
     }
 
     @Test
