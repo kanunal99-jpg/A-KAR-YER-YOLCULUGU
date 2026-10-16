@@ -106,30 +106,56 @@ object CareerAgentEngine {
      * Optimizes Master Profile for a specific job without hallucinating.
      */
     fun generateTailoredCv(profile: MasterCareerProfile, job: JobListing): ResumeVersion {
-        val dateFormat = SimpleDateFormat("dd.MM.yyyy", Locale("tr"))
-        val dateStr = dateFormat.format(Date())
+        val dateStr = SimpleDateFormat("dd.MM.yyyy", Locale("tr")).format(Date())
 
-        val summary = "${job.company} bünyesindeki '${job.title}' pozisyonunun gereksinimleriyle doğrudan örtüşen ${profile.experiences.firstOrNull()?.company ?: "FMCG"} saha tecrübesi. ${profile.leadership.maxTeamSize} kişilik saha ekibi liderliği, ${job.requiredSkills.take(3).joinToString(", ")} yetkinlikleri ve kanıtlanmış ciro büyütme başarılarıyla şirketin bölge hedeflerine derhal katkı sağlamaya hazır profesyonel profil."
+        // Only use details supplied by the candidate, never sample-company metrics.
+        val highlightedSkills = job.requiredSkills.filter { required ->
+            profile.skills.any { it.name.contains(required, ignoreCase = true) ||
+                required.contains(it.name, ignoreCase = true) }
+        }.ifEmpty { profile.skills.map { it.name }.filter { it.isNotBlank() }.take(6) }
 
-        val highlightedSkills = job.requiredSkills.filter { req ->
-            profile.skills.any { it.name.contains(req, ignoreCase = true) }
-        }.ifEmpty { profile.skills.map { it.name }.take(6) }
+        val evidencedRoles = profile.experiences.take(3).mapNotNull { experience ->
+            val parts = listOf(experience.position, experience.company).filter { it.isNotBlank() }
+            parts.joinToString(" / ").takeIf { it.isNotBlank() }
+        }
+        val candidateAchievements = profile.achievements
+            .filter { it.verified && it.title.isNotBlank() }
+            .take(3).map { it.title }
 
-        val coverLetter = """
-Sayın ${job.company} İşe Alım Ekibi ve Satış Direktörlüğü,
+        val summaryParts = mutableListOf(
+            "${job.title} pozisyonu için adayın sağladığı CV bilgilerine dayanan profil."
+        )
+        if (evidencedRoles.isNotEmpty()) {
+            summaryParts.add("Deneyim: ${evidencedRoles.joinToString("; ")}.")
+        }
+        if (highlightedSkills.isNotEmpty()) {
+            summaryParts.add("Yetkinlikler: ${highlightedSkills.joinToString(", ")}.")
+        }
+        if (candidateAchievements.isNotEmpty()) {
+            summaryParts.add("CV'de belirtilen başarılar: ${candidateAchievements.joinToString("; ")}.")
+        }
+        val summary = summaryParts.joinToString(" ")
 
-Şirketiniz bünyesinde yayımlanan '${job.title}' pozisyonunu büyük bir ilgi ve heyecanla inceledim. 
-
-FMCG ve saha operasyonları alanında geride bıraktığım 7 yılı aşkın tecrübem boyunca; 60'ı aşkın yetkili bayi ağının sevk ve idaresini yürüttüm, 18 kişilik saha ekibimin haftalık KPI ve tanzim-teşhir penetrasyonunu %84 seviyesine taşıdım. Sütaş ve Peyman bünyesinde gerçekleştirdiğim dağıtım maliyetlerinde %14 optimizasyon ve aktif portföye +85 yeni nokta kazandırma başarılarım, ${job.company}'nin büyüme ve saha hedeflerine doğrudan katkı sunabilecek niteliktedir.
-
-Pozisyonun gerektirdiği ${job.requiredSkills.take(3).joinToString(", ")} süreçlerini şirketinizin kurumsal vizyonu doğrultusunda yönetmek ve bölgedeki pazar payını artırmak adına bu fırsatı değerlendirmeyi çok arzu ediyorum.
-
-Detayları şahsen veya online bir mülakatta paylaşmaktan memnuniyet duyarım. Zamanınız ve değerlendirmeniz için teşekkür ederim.
-
-Saygılarımla,
-${profile.fullName}
-${profile.phone} | ${profile.email}
-        """.trimIndent()
+        val coverLetter = buildString {
+            appendLine("Sayın ${job.company} İşe Alım Ekibi,")
+            appendLine()
+            appendLine("${job.title} pozisyonuna başvurmak istiyorum.")
+            if (evidencedRoles.isNotEmpty()) {
+                appendLine("CV'mde yer alan deneyimlerim: ${evidencedRoles.joinToString("; ")}.")
+            }
+            if (highlightedSkills.isNotEmpty()) {
+                appendLine("Profilimde belirtilen ilgili yetkinliklerim: ${highlightedSkills.joinToString(", ")}.")
+            }
+            if (candidateAchievements.isNotEmpty()) {
+                appendLine("CV'mde belirttiğim başarılar: ${candidateAchievements.joinToString("; ")}.")
+            }
+            appendLine("Başvurumun gerekliliklerle uyumunu görüşmede değerlendirmekten memnuniyet duyarım.")
+            appendLine()
+            appendLine("Saygılarımla,")
+            appendLine(profile.fullName.ifBlank { "Aday" })
+            val contact = listOf(profile.phone, profile.email).filter { it.isNotBlank() }
+            if (contact.isNotEmpty()) appendLine(contact.joinToString(" | "))
+        }.trim()
 
         return ResumeVersion(
             id = "cv_tailored_${job.id}_${System.currentTimeMillis()}",
@@ -139,7 +165,7 @@ ${profile.phone} | ${profile.email}
             keyHighlightedSkills = highlightedSkills,
             prioritizedExperienceIds = profile.experiences.map { it.id },
             coverLetterText = coverLetter,
-            atsScoreEstimated = 94,
+            atsScoreEstimated = evaluateJobMatch(profile, job).overallMatchPercent,
             createdAtFormatted = dateStr
         )
     }
