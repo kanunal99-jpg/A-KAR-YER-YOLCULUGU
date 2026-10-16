@@ -87,7 +87,27 @@ class CareerAgentEngineTest {
         assertTrue(tailored.title.contains(job.company))
         assertTrue(tailored.targetRoleOrJob.contains(job.title))
         assertTrue(tailored.coverLetterText.contains(job.company))
-        assertTrue(tailored.atsScoreEstimated >= 85)
+        assertEquals(CareerAgentEngine.evaluateJobMatch(profile, job).overallMatchPercent, tailored.atsScoreEstimated)
+    }
+
+    @Test
+    fun testTailoredCv_neverInventsExperienceForEmptyCandidateProfile() {
+        val profile = com.example.data.model.MasterCareerProfile(
+            fullName = "Deniz Örnek",
+            email = "deniz@example.com"
+        )
+        val job = SampleData.sampleJobs.first()
+
+        val tailored = CareerAgentEngine.generateTailoredCv(profile, job)
+
+        assertTrue(tailored.coverLetterText.contains("Deniz Örnek"))
+        assertTrue(tailored.coverLetterText.contains(job.company))
+        assertFalse(tailored.coverLetterText.contains("Sütaş"))
+        assertFalse(tailored.coverLetterText.contains("Peyman"))
+        assertFalse(tailored.coverLetterText.contains("%14"))
+        assertFalse(tailored.coverLetterText.contains("7 yılı"))
+        assertFalse(tailored.professionalSummary.contains("60+"))
+        assertTrue(tailored.keyHighlightedSkills.isEmpty())
     }
 
     @Test
