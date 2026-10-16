@@ -54,36 +54,58 @@ object CareerAgentEngine {
 
         val overall = ((skillsScore * 0.35) + (experienceScore * 0.20) + (industryScore * 0.15) + (seniorityScore * 0.15) + (locationScore * 0.10) + (educationScore * 0.05)).toInt()
 
+        // Explain matching from candidate/advert evidence, not a fictional sample CV.
         val whyFit = mutableListOf<String>()
-        whyFit.add("7+ yıllık güçlü saha operasyonu ve FMCG sektör tecrübesi")
-        whyFit.add("60+ bayilik distribütör ağı ve 18 kişilik saha ekibi yönetimi kanıtı")
-        whyFit.add("Ciro ve penetrasyon hedeflerini %112 oranında gerçekleştirme geçmişi")
-        whyFit.add("Lokasyon ve aktif seyahat / sürüş şartlarına tam uyum")
-
-        val whyNotFit = mutableListOf<String>()
-        if (job.preferredSkills.any { it.contains("İngilizce", ignoreCase = true) }) {
-            whyNotFit.add("İlandaki ileri seviye İngilizce beklentisine karşın aday seviyesi B1 (Orta)")
+        if (matchedSkills.isNotEmpty()) {
+            whyFit.add("CV'de bulunan ve ilanla eşleşen beceriler: ${matchedSkills.joinToString(", ")}")
         }
-        if (job.preferredSkills.any { it.contains("SAP SD", ignoreCase = true) || it.contains("WMS", ignoreCase = true) }) {
-            whyNotFit.add("Kurumsal ERP (SAP) modül kullanımı CV'de operasyonel düzeyde belirtilmiş, mimari düzeyde değil")
+        profile.experiences.firstOrNull { it.company.isNotBlank() || it.position.isNotBlank() }?.let { exp ->
+            val positionAndCompany = listOf(exp.position, exp.company)
+                .filter { it.isNotBlank() }.joinToString(" / ")
+            whyFit.add("CV'de beyan edilen deneyim: $positionAndCompany")
+        }
+        profile.achievements.firstOrNull { it.verified && it.title.isNotBlank() }?.let {
+            whyFit.add("CV'de belirtilen başarı: ${it.title}")
+        }
+        if (profile.locationCity.isNotBlank() && job.location.isNotBlank() &&
+            (profile.locationCity.equals(job.location, ignoreCase = true) ||
+                job.location.contains(profile.locationCity, ignoreCase = true))) {
+            whyFit.add("CV'de belirtilen şehir, ilandaki konumla eşleşiyor: ${profile.locationCity}")
+        }
+
+        val missingRequiredSkills = job.requiredSkills.filterNot { it in matchedSkills }
+        val missingPreferredSkills = job.preferredSkills.filterNot { preferred ->
+            profileSkillNames.any { skill ->
+                skill.isNotBlank() && (skill.contains(preferred.lowercase()) ||
+                    preferred.lowercase().contains(skill))
+            }
+        }
+        val whyNotFit = mutableListOf<String>()
+        if (missingRequiredSkills.isNotEmpty()) {
+            whyNotFit.add("CV'de doğrulanamayan zorunlu beceriler: ${missingRequiredSkills.joinToString(", ")}")
+        }
+        if (missingPreferredSkills.isNotEmpty()) {
+            whyNotFit.add("CV'de doğrulanamayan tercih edilen beceriler: ${missingPreferredSkills.joinToString(", ")}")
         }
         if (whyNotFit.isEmpty()) {
-            whyNotFit.add("Daha önce ulusal zincir genel merkez satın alma müzakeresinde tek yetkili rolü bulunmuyor")
+            whyNotFit.add("İşverenin ek koşulları ve deneyim düzeyi görüşmede ayrıca doğrulanmalıdır.")
+        }
+        val missingGaps = buildList {
+            if (missingRequiredSkills.isNotEmpty()) {
+                add("Zorunlu beceriler için CV'de kanıt veya eğitim planı ekleyin: ${missingRequiredSkills.joinToString(", ")}")
+            }
+            if (missingPreferredSkills.isNotEmpty()) {
+                add("Tercih edilen becerilere ilişkin varsa deneyim kanıtı ekleyin: ${missingPreferredSkills.joinToString(", ")}")
+            }
+            if (isEmpty()) add("CV'nizdeki mevcut beceri ve başarı kanıtlarını görüşmede açıklamaya hazırlanın.")
         }
 
-        val missingGaps = listOf(
-            "Ticari İngilizce mülakat pratiği yapılması",
-            "SAP SD sipariş ve iskonto onay iş akışlarının CV'de ön plana çıkarılması",
-            "Bölgesel bütçe tasarruf oranlarının mülakatta sayısal verilerle açıklanması"
-        )
-
         val aiInsight = when {
-            job.title.contains("Bayi", ignoreCase = true) || job.title.contains("Saha Satış", ignoreCase = true) ->
-                "Bu ilan sadece 'satış yapacak biri' aramıyor; bölge distribütörlerinin finansal ve stok riskini yönetecek, sahada ekibin rut disiplinini sağlayacak güvenilir bir lider arıyor."
-            job.title.contains("Operasyon", ignoreCase = true) ->
-                "İlanın gerçek odak noktası dağıtım hızı, filo SLA performansı ve kriz anında hızlı rota/ekip çözümü üretmektir."
-            else ->
-                "Şirket dinamik büyüme aşamasında olup, inisiyatif alabilen ve KPI odaklı düşünebilen bir yönetici hedefliyor."
+            job.duties.isNotEmpty() ->
+                "İlanda açıklanan görevler: ${job.duties.take(3).joinToString("; ")}."
+            job.description.isNotBlank() ->
+                "İlan açıklaması: ${job.description.take(200)}"
+            else -> "Pozisyon: ${job.title}. Gereksinimler işverenle ayrıca doğrulanmalıdır."
         }
 
         return JobMatchResult(
@@ -236,9 +258,11 @@ object CareerAgentEngine {
                     contextReason = "Yöneticilik pozisyonunda liderlik dayanıklılığı"
                 ),
                 InterviewQuestion(
-                    questionText = "CV'nizde Sütaş bünyesinde dağıtım maliyetlerini %14 düşürdüğünüzü belirtmişsiniz. Bu projede tam olarak hangi adımları attınız ve karşılaştığınız en büyük direnç neydi?",
+                    questionText = profile.achievements.firstOrNull { it.verified && it.title.isNotBlank() }
+                        ?.let { "CV'nizde belirttiğiniz '${it.title}' başarısını hangi adımlarla elde ettiniz? Nasıl doğrularsınız?" }
+                        ?: "Önceki çalışmalarınızdan ölçülebilir bir başarı örneğiniz varsa hangi adımları izlediğinizi anlatır mısınız?",
                     questionCategory = "CV & Kanıt Doğrulama",
-                    contextReason = "CV'deki ölçülebilir başarı kanıtının derinlemesine incelenmesi"
+                    contextReason = "Adayın kendi başarı kanıtının incelenmesi"
                 ),
                 InterviewQuestion(
                     questionText = "Bizim sektörümüzde rekabet çok sert ve pazar dinamikleri hızla değişiyor. Şirketimizi rakiplerimizden ayrıştıracak saha tanzim-teşhir inovasyonu için ne önerirsiniz?",
